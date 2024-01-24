@@ -25,8 +25,12 @@ LLVM_INSTALL_DIR        ?= ${INSTALL_DIR}/riscv-llvm
 ISA_SIM_INSTALL_DIR     ?= ${INSTALL_DIR}/riscv-isa-sim
 ISA_SIM_MOD_INSTALL_DIR ?= ${INSTALL_DIR}/riscv-isa-sim-mod
 VERIL_INSTALL_DIR       ?= ${INSTALL_DIR}/verilator
-VERIL_VERSION           ?= v5.012
-DTC_COMMIT              ?= b6910bec11614980a21e46fbccc35934b671bd81
+
+# VERILATOR tags: https://github.com/verilator/verilator/tags
+VERIL_VERSION           ?= v5.020
+
+# DTC tags: https://github.com/dgibson/dtc/tags
+DTC_COMMIT              ?= v1.7.0
 
 CMAKE ?= cmake
 
@@ -65,7 +69,7 @@ toolchain-gcc: Makefile
 	cd $(CURDIR)/toolchain/riscv-gnu-toolchain/riscv-binutils
 	cd $(CURDIR)/toolchain/riscv-gnu-toolchain && rm -rf build && mkdir -p build && cd build && \
 	CC=$(CC) CXX=$(CXX) ../configure --prefix=$(GCC_INSTALL_DIR) --with-arch=rv64gcv --with-cmodel=medlow --enable-multilib && \
-	$(MAKE) MAKEINFO=true -j4
+	$(MAKE) MAKEINFO=true -j$(shell nproc)
 
 toolchain-llvm-main: Makefile
 	mkdir -p $(LLVM_INSTALL_DIR)
@@ -91,10 +95,11 @@ toolchain-llvm-newlib: Makefile toolchain-llvm
 	AR_FOR_TARGET=${LLVM_INSTALL_DIR}/bin/llvm-ar \
 	LD_FOR_TARGET=${LLVM_INSTALL_DIR}/bin/llvm-ld \
 	RANLIB_FOR_TARGET=${LLVM_INSTALL_DIR}/bin/llvm-ranlib && \
-	make && \
+	make -j$(shell nproc) && \
 	make install
 
 toolchain-llvm-rt: Makefile toolchain-llvm-main toolchain-llvm-newlib
+	LLVM_BUILDED_VERSION := $(shell $(LLVM_INSTALL_DIR)/bin/llvm-config --version | cut -d. -f1)
 	cd $(ROOT_DIR)/toolchain/riscv-llvm/compiler-rt && rm -rf build && mkdir -p build && cd build && \
 	$(CMAKE) $(ROOT_DIR)/toolchain/riscv-llvm/compiler-rt -G Ninja \
 	-DCMAKE_INSTALL_PREFIX=$(LLVM_INSTALL_DIR) \
@@ -117,10 +122,11 @@ toolchain-llvm-rt: Makefile toolchain-llvm-main toolchain-llvm-newlib
 	-DCMAKE_AR=$(LLVM_INSTALL_DIR)/bin/llvm-ar \
 	-DCMAKE_NM=$(LLVM_INSTALL_DIR)/bin/llvm-nm \
 	-DCMAKE_RANLIB=$(LLVM_INSTALL_DIR)/bin/llvm-ranlib \
-	-DLLVM_CONFIG_PATH=$(LLVM_INSTALL_DIR)/bin/llvm-config
+	-DLLVM_CMAKE_DIR=$(LLVM_INSTALL_DIR)/bin/llvm-config
 	cd $(ROOT_DIR)/toolchain/riscv-llvm/compiler-rt && \
 	$(CMAKE) --build build --target install && \
-	ln -s $(LLVM_INSTALL_DIR)/lib/linux $(LLVM_INSTALL_DIR)/lib/clang/16/lib
+	ln -s $(LLVM_INSTALL_DIR)/lib/linux $(LLVM_INSTALL_DIR)/lib/clang/$(LLVM_BUILDED_VERSION)/lib
+#	ln -s $(LLVM_INSTALL_DIR)/lib/linux $(LLVM_INSTALL_DIR)/lib/clang/16/lib
 
 # Spike
 .PHONY: riscv-isa-sim riscv-isa-sim-mod
@@ -136,11 +142,11 @@ ${ISA_SIM_MOD_INSTALL_DIR}: Makefile patches/0003-riscv-isa-sim-patch ${ISA_SIM_
 	cd toolchain/riscv-isa-sim && git stash && git apply ../../patches/0003-riscv-isa-sim-patch && \
 	rm -rf build && mkdir -p build && cd build; \
 	[ -d dtc ] || git clone https://git.kernel.org/pub/scm/utils/dtc/dtc.git && cd dtc && git checkout $(DTC_COMMIT); \
-	make install SETUP_PREFIX=$(ISA_SIM_MOD_INSTALL_DIR) PREFIX=$(ISA_SIM_MOD_INSTALL_DIR) && \
+	make -j$(shell nproc) install SETUP_PREFIX=$(ISA_SIM_MOD_INSTALL_DIR) PREFIX=$(ISA_SIM_MOD_INSTALL_DIR) && \
 	PATH=$(ISA_SIM_MOD_INSTALL_DIR)/bin:$$PATH; cd ..; \
 	../configure --prefix=$(ISA_SIM_MOD_INSTALL_DIR) \
 	--without-boost --without-boost-asio --without-boost-regex && \
-	make -j32 && make install; \
+	make -j$(shell nproc) && make install; \
 	git stash
 
 ${ISA_SIM_INSTALL_DIR}: Makefile
@@ -151,11 +157,11 @@ ${ISA_SIM_INSTALL_DIR}: Makefile
 	# Spike was compiled successfully using gcc and g++ version 7.2.0.
 	cd toolchain/riscv-isa-sim && rm -rf build && mkdir -p build && cd build; \
 	[ -d dtc ] || git clone https://git.kernel.org/pub/scm/utils/dtc/dtc.git && cd dtc && git checkout $(DTC_COMMIT); \
-	make install SETUP_PREFIX=$(ISA_SIM_INSTALL_DIR) PREFIX=$(ISA_SIM_INSTALL_DIR) && \
+	make -j$(shell nproc) install SETUP_PREFIX=$(ISA_SIM_INSTALL_DIR) PREFIX=$(ISA_SIM_INSTALL_DIR) && \
 	PATH=$(ISA_SIM_INSTALL_DIR)/bin:$$PATH; cd ..; \
 	../configure --prefix=$(ISA_SIM_INSTALL_DIR) \
 	--without-boost --without-boost-asio --without-boost-regex && \
-	make -j32 && make install
+	make -j$(shell nproc) && make install
 
 # Verilator
 .PHONY: verilator
@@ -167,11 +173,11 @@ ${VERIL_INSTALL_DIR}: Makefile
 	# Compile verilator
 	cd $(CURDIR)/toolchain/verilator && git clean -xfdf && autoconf && \
 	CC=$(CLANG_CC) CXX=$(CLANG_CXX) CXXFLAGS=$(CLANG_CXXFLAGS) LDFLAGS=$(CLANG_LDFLAGS) \
-		./configure --prefix=$(VERIL_INSTALL_DIR) && make -j8 && make install
+		./configure --prefix=$(VERIL_INSTALL_DIR) && make -j$(shell nproc) && make install
 
 # RISC-V Tests
 riscv_tests:
-	make -C apps -j4 riscv_tests && \
+	make -C apps j$(shell nproc) riscv_tests && \
 	make -C hardware riscv_tests_simc
 
 # Helper targets
