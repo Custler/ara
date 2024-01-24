@@ -61,6 +61,9 @@ all: toolchains riscv-isa-sim verilator
 .PHONY: toolchains toolchain-gcc toolchain-llvm toolchain-llvm-main toolchain-llvm-newlib toolchain-llvm-rt
 toolchains: toolchain-gcc toolchain-llvm
 
+.PHONY: clear-toolchain-llvm clear-toolchain-llvm-main clear-toolchain-llvm-newlib clear-toolchain-llvm-rt
+clear-toolchain-llmv: clear-toolchain-llvm-main clear-toolchain-llvm-newlib clear-toolchain-llvm-rt
+
 toolchain-llvm: toolchain-llvm-main toolchain-llvm-newlib toolchain-llvm-rt
 
 toolchain-gcc: Makefile
@@ -71,9 +74,12 @@ toolchain-gcc: Makefile
 	CC=$(CC) CXX=$(CXX) ../configure --prefix=$(GCC_INSTALL_DIR) --with-arch=rv64gcv --with-cmodel=medlow --enable-multilib && \
 	$(MAKE) MAKEINFO=true -j$(shell nproc)
 
+clear-toolchain-llvm-main:
+	rm -rf $(ROOT_DIR)/toolchain/riscv-llvm/build
+
 toolchain-llvm-main: Makefile
 	mkdir -p $(LLVM_INSTALL_DIR)
-	cd $(ROOT_DIR)/toolchain/riscv-llvm && rm -rf build && mkdir -p build && cd build && \
+	cd $(ROOT_DIR)/toolchain/riscv-llvm && mkdir -p build && cd build && \
 	$(CMAKE) -G Ninja  \
 	-DCMAKE_INSTALL_PREFIX=$(LLVM_INSTALL_DIR) \
 	-DLLVM_ENABLE_PROJECTS="clang;lld" \
@@ -86,8 +92,11 @@ toolchain-llvm-main: Makefile
 	cd $(ROOT_DIR)/toolchain/riscv-llvm && \
 	$(CMAKE) --build build --target install
 
+clear-toolchain-llvm-newlib:
+	rm -rf $(ROOT_DIR)/toolchain/newlib/build
+
 toolchain-llvm-newlib: Makefile toolchain-llvm
-	cd ${ROOT_DIR}/toolchain/newlib && rm -rf build && mkdir -p build && cd build && \
+	cd ${ROOT_DIR}/toolchain/newlib && mkdir -p build && cd build && \
 	../configure --prefix=${LLVM_INSTALL_DIR} \
 	--target=riscv64-unknown-elf \
 	CC_FOR_TARGET="${LLVM_INSTALL_DIR}/bin/clang -march=rv64gc -mabi=lp64d -mno-relax -mcmodel=medany -Wno-error-implicit-function-declaration -Wno-error=int-conversion" \
@@ -98,9 +107,11 @@ toolchain-llvm-newlib: Makefile toolchain-llvm
 	make -j$(shell nproc) && \
 	make install
 
+clear-toolchain-llvm-rt:
+	rm -rf $(ROOT_DIR)/toolchain/riscv-llvm/compiler-rt/build
+
 toolchain-llvm-rt: Makefile toolchain-llvm-main toolchain-llvm-newlib
-	LLVM_BUILDED_VERSION := $(shell $(LLVM_INSTALL_DIR)/bin/llvm-config --version | cut -d. -f1)
-	cd $(ROOT_DIR)/toolchain/riscv-llvm/compiler-rt && rm -rf build && mkdir -p build && cd build && \
+	cd $(ROOT_DIR)/toolchain/riscv-llvm/compiler-rt && mkdir -p build && cd build && \
 	$(CMAKE) $(ROOT_DIR)/toolchain/riscv-llvm/compiler-rt -G Ninja \
 	-DCMAKE_INSTALL_PREFIX=$(LLVM_INSTALL_DIR) \
 	-DCMAKE_C_COMPILER_TARGET="riscv64-unknown-elf" \
@@ -125,7 +136,7 @@ toolchain-llvm-rt: Makefile toolchain-llvm-main toolchain-llvm-newlib
 	-DLLVM_CMAKE_DIR=$(LLVM_INSTALL_DIR)/bin/llvm-config
 	cd $(ROOT_DIR)/toolchain/riscv-llvm/compiler-rt && \
 	$(CMAKE) --build build --target install && \
-	ln -s $(LLVM_INSTALL_DIR)/lib/linux $(LLVM_INSTALL_DIR)/lib/clang/$(LLVM_BUILDED_VERSION)/lib
+	ln -s $(LLVM_INSTALL_DIR)/lib/linux $(LLVM_INSTALL_DIR)/lib/clang/$(shell $(LLVM_INSTALL_DIR)/bin/llvm-config --version | cut -d. -f1)/lib
 #	ln -s $(LLVM_INSTALL_DIR)/lib/linux $(LLVM_INSTALL_DIR)/lib/clang/16/lib
 
 # Spike
