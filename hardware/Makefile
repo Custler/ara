@@ -11,7 +11,7 @@ INSTALL_DIR := $(abspath $(ROOT_DIR)/../install)
 VERILATOR_INCLUDE := $(INSTALL_DIR)/verilator/share/verilator/include/vltstd
 
 BENDER         := $(ROOT_DIR)/../hardware/bender
-BENDER_VERSION := 0.27.3
+BENDER_VERSION := 0.28.0
 
 # Choose Ara's configuration
 ifndef config
@@ -57,7 +57,8 @@ else
   questa_version ?= 2021.2
 endif
 # QuestaSim command
-questa_cmd     ?= questa-$(questa_version)
+# questa_cmd     ?= questa-$(questa_version)
+questa_cmd	   ?= vsim
 # QuestaSim arguments
 questa_args    ?=
 # Path to the binaries
