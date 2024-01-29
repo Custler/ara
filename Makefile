@@ -62,7 +62,7 @@ all: toolchains riscv-isa-sim verilator
 toolchains: toolchain-gcc toolchain-llvm
 
 .PHONY: clear-toolchain-llvm clear-toolchain-llvm-main clear-toolchain-llvm-newlib clear-toolchain-llvm-rt
-clear-toolchain-llmv: clear-toolchain-llvm-main clear-toolchain-llvm-newlib clear-toolchain-llvm-rt
+clear-toolchain-llvm: clear-toolchain-llvm-main clear-toolchain-llvm-newlib clear-toolchain-llvm-rt
 
 toolchain-llvm: toolchain-llvm-main toolchain-llvm-newlib toolchain-llvm-rt
 
@@ -78,7 +78,6 @@ clear-toolchain-llvm-main:
 	rm -rf $(ROOT_DIR)/toolchain/riscv-llvm/build
 
 toolchain-llvm-main: Makefile
-	mkdir -p $(LLVM_INSTALL_DIR)
 	cd $(ROOT_DIR)/toolchain/riscv-llvm && mkdir -p build && cd build && \
 	$(CMAKE) -G Ninja  \
 	-DCMAKE_INSTALL_PREFIX=$(LLVM_INSTALL_DIR) \
@@ -137,7 +136,6 @@ toolchain-llvm-rt: Makefile toolchain-llvm-main toolchain-llvm-newlib
 	cd $(ROOT_DIR)/toolchain/riscv-llvm/compiler-rt && \
 	$(CMAKE) --build build --target install && \
 	ln -s $(LLVM_INSTALL_DIR)/lib/linux $(LLVM_INSTALL_DIR)/lib/clang/$(shell $(LLVM_INSTALL_DIR)/bin/llvm-config --version | cut -d. -f1)/lib
-#	ln -s $(LLVM_INSTALL_DIR)/lib/linux $(LLVM_INSTALL_DIR)/lib/clang/16/lib
 
 # Spike
 .PHONY: riscv-isa-sim riscv-isa-sim-mod
