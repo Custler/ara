@@ -57,8 +57,7 @@ else
   questa_version ?= 2021.2
 endif
 # QuestaSim command
-# questa_cmd     ?= questa-$(questa_version)
-questa_cmd	   ?= vsim
+questa_cmd     ?= questa-$(questa_version)
 # QuestaSim arguments
 questa_args    ?=
 # Path to the binaries
