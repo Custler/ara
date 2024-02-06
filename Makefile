@@ -29,8 +29,9 @@ VERIL_INSTALL_DIR       ?= ${INSTALL_DIR}/verilator
 # VERILATOR tags: https://github.com/verilator/verilator/tags
 VERIL_VERSION           ?= v5.020
 
+DTC_COMMIT              ?= v1.6.1
 # DTC tags: https://github.com/dgibson/dtc/tags
-DTC_COMMIT              ?= v1.7.0
+# DTC_COMMIT              ?= v1.7.0
 
 CMAKE ?= cmake
 
