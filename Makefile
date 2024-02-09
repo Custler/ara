@@ -26,6 +26,9 @@ ISA_SIM_INSTALL_DIR     ?= ${INSTALL_DIR}/riscv-isa-sim
 ISA_SIM_MOD_INSTALL_DIR ?= ${INSTALL_DIR}/riscv-isa-sim-mod
 VERIL_INSTALL_DIR       ?= ${INSTALL_DIR}/verilator
 
+# riscv-gnu-toolchain tags: https://github.com/riscv-collab/riscv-gnu-toolchain/tags
+RISCV_GNU_TOOLCHAIN_TAG ?= 2024.02.02 
+
 # VERILATOR tags: https://github.com/verilator/verilator/tags
 VERIL_VERSION           ?= v5.020
 
@@ -68,9 +71,12 @@ clear-toolchain-llvm: clear-toolchain-llvm-main clear-toolchain-llvm-newlib clea
 toolchain-llvm: toolchain-llvm-main toolchain-llvm-newlib toolchain-llvm-rt
 
 toolchain-gcc: Makefile
+	cd $(CURDIR)/toolchain && \
+	git clone --depth 1 https://github.com/riscv-collab/riscv-gnu-toolchain.git && \
+	git fetch --depth 1 origin $(RISCV_GNU_TOOLCHAIN_TAG) && \
+	git checkout $(RISCV_GNU_TOOLCHAIN_TAG) && \
+	git submodule update --init --recursive
 	mkdir -p $(GCC_INSTALL_DIR)
-	# Apply patch on riscv-binutils
-	cd $(CURDIR)/toolchain/riscv-gnu-toolchain/riscv-binutils
 	cd $(CURDIR)/toolchain/riscv-gnu-toolchain && rm -rf build && mkdir -p build && cd build && \
 	CC=$(CC) CXX=$(CXX) ../configure --prefix=$(GCC_INSTALL_DIR) --with-arch=rv64gcv --with-cmodel=medlow --enable-multilib && \
 	$(MAKE) MAKEINFO=true -j$(shell nproc)
