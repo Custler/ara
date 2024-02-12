@@ -26,11 +26,17 @@ ISA_SIM_INSTALL_DIR     ?= ${INSTALL_DIR}/riscv-isa-sim
 ISA_SIM_MOD_INSTALL_DIR ?= ${INSTALL_DIR}/riscv-isa-sim-mod
 VERIL_INSTALL_DIR       ?= ${INSTALL_DIR}/verilator
 
+#===============================================================================
+# Toolchain versions
+
+# Newlib tags: https://sourceware.org/git/?p=newlib-cygwin.git;a=tags
+NEWLIB_TAG              ?= newlib-4.4.0
+
 # riscv-gnu-toolchain tags: https://github.com/riscv-collab/riscv-gnu-toolchain/tags
 RISCV_GNU_TOOLCHAIN_TAG ?= 2024.02.02
 
-# LLVM tags: https://github.com/llvm/llvm-project/tags
-LLVM_TAG                ?= llvmorg-17.0.6
+# LLVM version:
+LLVM_VER                ?= release/17.x
 
 # VERILATOR tags: https://github.com/verilator/verilator/tags
 VERIL_VERSION           ?= v5.020
@@ -38,6 +44,8 @@ VERIL_VERSION           ?= v5.020
 DTC_COMMIT              ?= v1.6.1
 # DTC tags: https://github.com/dgibson/dtc/tags
 # DTC_COMMIT              ?= v1.7.0
+
+#===============================================================================
 
 CMAKE ?= cmake
 
@@ -68,44 +76,47 @@ all: toolchains riscv-isa-sim verilator
 .PHONY: toolchains toolchain-gcc toolchain-llvm toolchain-llvm-main toolchain-llvm-newlib toolchain-llvm-rt
 toolchains: toolchain-gcc toolchain-llvm
 
-.PHONY: clear-toolchain-llvm clear-toolchain-llvm-main clear-toolchain-llvm-newlib clear-toolchain-llvm-rt
-clear-toolchain-llvm: clear-toolchain-llvm-main clear-toolchain-llvm-newlib clear-toolchain-llvm-rt
-
+toolchain-llvm: REBUILD_LLVM=1
 toolchain-llvm: toolchain-llvm-main toolchain-llvm-newlib toolchain-llvm-rt
 
-toolchain-gcc: Makefile
-	cd $(CURDIR)/toolchain && \
-	git clone --depth 1 https://github.com/riscv-collab/riscv-gnu-toolchain.git && \
-	cd $(CURDIR)/toolchain/riscv-gnu-toolchain && \
-	git fetch --depth 1 origin $(RISCV_GNU_TOOLCHAIN_TAG) && \
-	git checkout $(RISCV_GNU_TOOLCHAIN_TAG) && \
-	git submodule update --init --recursive
+# GCC ================================================
+toolchain-gcc: 
+	rm -rf $(ROOT_DIR)/toolchain/riscv-gnu-toolchain
+	cd $(ROOT_DIR)/toolchain && \
+	git clone --depth 1 --branch $(RISCV_GNU_TOOLCHAIN_TAG) --recursive https://github.com/riscv-collab/riscv-gnu-toolchain.git && \
+	cd $(ROOT_DIR)/toolchain/riscv-gnu-toolchain && \
 	mkdir -p $(GCC_INSTALL_DIR)
-	cd $(CURDIR)/toolchain/riscv-gnu-toolchain && rm -rf build && mkdir -p build && cd build && \
+	cd $(ROOT_DIR)/toolchain/riscv-gnu-toolchain && rm -rf build && mkdir -p build && cd build && \
 	CC=$(CC) CXX=$(CXX) ../configure --prefix=$(GCC_INSTALL_DIR) --with-arch=rv64gcv --with-cmodel=medlow --enable-multilib && \
 	$(MAKE) MAKEINFO=true -j$(shell nproc)
 
-clear-toolchain-llvm-main:
-	rm -rf $(ROOT_DIR)/toolchain/riscv-llvm/build
+# LLVM ================================================
+toolchain-llvm-main:
+	if [ "$(REBUILD_LLVM)" = "1" ]; then \
+		rm -rf $(ROOT_DIR)/toolchain/riscv-llvm; \
+	fi
+	if [ ! -d "$(ROOT_DIR)/toolchain/riscv-llvm" ]; then \
+		cd $(ROOT_DIR)/toolchain && \
+		git clone --depth 1 --recursive --branch $(LLVM_VER) https://github.com/llvm/llvm-project.git riscv-llvm && \
+		cd $(ROOT_DIR)/toolchain/riscv-llvm && mkdir -p build && cd build && \
+		$(CMAKE) -G Ninja  \
+		-DCMAKE_INSTALL_PREFIX=$(LLVM_INSTALL_DIR) \
+		-DLLVM_ENABLE_PROJECTS="clang;lld" \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_C_COMPILER=$(CC) \
+		-DCMAKE_CXX_COMPILER=$(CXX) \
+		-DLLVM_DEFAULT_TARGET_TRIPLE=riscv64-unknown-elf \
+		-DLLVM_TARGETS_TO_BUILD="RISCV" \
+		../llvm && \
+		cd $(ROOT_DIR)/toolchain/riscv-llvm && \
+		$(CMAKE) --build build --target install; \
+	fi
 
-toolchain-llvm-main: Makefile
-	cd $(ROOT_DIR)/toolchain/riscv-llvm && mkdir -p build && cd build && \
-	$(CMAKE) -G Ninja  \
-	-DCMAKE_INSTALL_PREFIX=$(LLVM_INSTALL_DIR) \
-	-DLLVM_ENABLE_PROJECTS="clang;lld" \
-	-DCMAKE_BUILD_TYPE=Release \
-	-DCMAKE_C_COMPILER=$(CC) \
-	-DCMAKE_CXX_COMPILER=$(CXX) \
-	-DLLVM_DEFAULT_TARGET_TRIPLE=riscv64-unknown-elf \
-	-DLLVM_TARGETS_TO_BUILD="RISCV" \
-	../llvm
-	cd $(ROOT_DIR)/toolchain/riscv-llvm && \
-	$(CMAKE) --build build --target install
-
-clear-toolchain-llvm-newlib:
-	rm -rf $(ROOT_DIR)/toolchain/newlib/build
-
-toolchain-llvm-newlib: Makefile toolchain-llvm
+# Newlib ================================================
+toolchain-llvm-newlib: toolchain-llvm-main toolchain-llvm-rt
+	rm -rf $(ROOT_DIR)/toolchain/newlib
+	cd ${ROOT_DIR}/toolchain && \
+	git clone --depth 1 --branch $(NEWLIB_TAG) --recursive https://sourceware.org/git/newlib-cygwin.git newlib
 	cd ${ROOT_DIR}/toolchain/newlib && mkdir -p build && cd build && \
 	../configure --prefix=${LLVM_INSTALL_DIR} \
 	--target=riscv64-unknown-elf \
@@ -117,10 +128,8 @@ toolchain-llvm-newlib: Makefile toolchain-llvm
 	make -j$(shell nproc) && \
 	make install
 
-clear-toolchain-llvm-rt:
-	rm -rf $(ROOT_DIR)/toolchain/riscv-llvm/compiler-rt/build
-
-toolchain-llvm-rt: Makefile toolchain-llvm-main toolchain-llvm-newlib
+# Compiler-RT ================================================
+toolchain-llvm-rt: toolchain-llvm-main
 	cd $(ROOT_DIR)/toolchain/riscv-llvm/compiler-rt && mkdir -p build && cd build && \
 	$(CMAKE) $(ROOT_DIR)/toolchain/riscv-llvm/compiler-rt -G Ninja \
 	-DCMAKE_INSTALL_PREFIX=$(LLVM_INSTALL_DIR) \
@@ -146,9 +155,9 @@ toolchain-llvm-rt: Makefile toolchain-llvm-main toolchain-llvm-newlib
 	-DLLVM_CMAKE_DIR=$(LLVM_INSTALL_DIR)/bin/llvm-config
 	cd $(ROOT_DIR)/toolchain/riscv-llvm/compiler-rt && \
 	$(CMAKE) --build build --target install && \
-	ln -s $(LLVM_INSTALL_DIR)/lib/linux $(LLVM_INSTALL_DIR)/lib/clang/$(shell $(LLVM_INSTALL_DIR)/bin/llvm-config --version | cut -d. -f1)/lib
+	ln -s $(LLVM_INSTALL_DIR)/lib/linux $(LLVM_INSTALL_DIR)/lib/clang/$(shell $(LLVM_INSTALL_DIR)/bin/llvm-config --version | cut -d. -f1)/lib | true
 
-# Spike
+# Spike (riscv-isa-sim)
 .PHONY: riscv-isa-sim riscv-isa-sim-mod
 riscv-isa-sim: ${ISA_SIM_INSTALL_DIR} ${ISA_SIM_MOD_INSTALL_DIR}
 riscv-isa-sim-mod: ${ISA_SIM_MOD_INSTALL_DIR}
@@ -188,10 +197,10 @@ ${ISA_SIM_INSTALL_DIR}: Makefile
 verilator: ${VERIL_INSTALL_DIR}
 
 ${VERIL_INSTALL_DIR}: Makefile
-	# Checkout the right version
-	cd $(CURDIR)/toolchain/verilator && git reset --hard && git fetch && git checkout ${VERIL_VERSION}
-	# Compile verilator
-	cd $(CURDIR)/toolchain/verilator && git clean -xfdf && autoconf && \
+	rm -rf $(ROOT_DIR)/toolchain/verilator
+	cd $(ROOT_DIR)/toolchain && \
+	git clone --depth 1 --branch ${VERIL_VERSION} https://github.com/verilator/verilator.git
+	cd $(ROOT_DIR)/toolchain/verilator && autoconf && \
 	CC=$(CLANG_CC) CXX=$(CLANG_CXX) CXXFLAGS=$(CLANG_CXXFLAGS) LDFLAGS=$(CLANG_LDFLAGS) \
 		./configure --prefix=$(VERIL_INSTALL_DIR) && make -j$(shell nproc) && make install
 
