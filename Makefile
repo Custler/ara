@@ -83,8 +83,9 @@ toolchain-llvm: toolchain-llvm-main toolchain-llvm-newlib toolchain-llvm-rt
 toolchain-gcc: 
 	rm -rf $(ROOT_DIR)/toolchain/riscv-gnu-toolchain
 	cd $(ROOT_DIR)/toolchain && \
-	git clone --depth 1 --branch $(RISCV_GNU_TOOLCHAIN_TAG) --recursive https://github.com/riscv-collab/riscv-gnu-toolchain.git && \
+	git clone --depth 1 --branch $(RISCV_GNU_TOOLCHAIN_TAG) https://github.com/riscv-collab/riscv-gnu-toolchain.git && \
 	cd $(ROOT_DIR)/toolchain/riscv-gnu-toolchain && \
+	git submodule foreach --recursive 'git submodule update --init --depth=1 --single-branch' && \
 	mkdir -p $(GCC_INSTALL_DIR)
 	cd $(ROOT_DIR)/toolchain/riscv-gnu-toolchain && rm -rf build && mkdir -p build && cd build && \
 	CC=$(CC) CXX=$(CXX) ../configure --prefix=$(GCC_INSTALL_DIR) --with-arch=rv64gcv --with-cmodel=medlow --enable-multilib && \
@@ -97,7 +98,9 @@ toolchain-llvm-main:
 	fi
 	if [ ! -d "$(ROOT_DIR)/toolchain/riscv-llvm" ]; then \
 		cd $(ROOT_DIR)/toolchain && \
-		git clone --depth 1 --recursive --branch $(LLVM_VER) https://github.com/llvm/llvm-project.git riscv-llvm && \
+		git clone --depth 1 --branch $(LLVM_VER) https://github.com/llvm/llvm-project.git riscv-llvm && \
+		cd $(ROOT_DIR)/toolchain/riscv-llvm && \
+		git submodule foreach --recursive 'git submodule update --init --depth=1 --single-branch' && \
 		cd $(ROOT_DIR)/toolchain/riscv-llvm && mkdir -p build && cd build && \
 		$(CMAKE) -G Ninja  \
 		-DCMAKE_INSTALL_PREFIX=$(LLVM_INSTALL_DIR) \
@@ -116,7 +119,9 @@ toolchain-llvm-main:
 toolchain-llvm-newlib: toolchain-llvm-main toolchain-llvm-rt
 	rm -rf $(ROOT_DIR)/toolchain/newlib
 	cd ${ROOT_DIR}/toolchain && \
-	git clone --depth 1 --branch $(NEWLIB_TAG) --recursive https://sourceware.org/git/newlib-cygwin.git newlib
+	git clone --depth 1 --branch $(NEWLIB_TAG) https://sourceware.org/git/newlib-cygwin.git newlib && \
+	cd ${ROOT_DIR}/toolchain/newlib && \
+	git submodule foreach --recursive 'git submodule update --init --depth=1 --single-branch' && \
 	cd ${ROOT_DIR}/toolchain/newlib && mkdir -p build && cd build && \
 	../configure --prefix=${LLVM_INSTALL_DIR} \
 	--target=riscv64-unknown-elf \
@@ -163,31 +168,20 @@ riscv-isa-sim: ${ISA_SIM_INSTALL_DIR} ${ISA_SIM_MOD_INSTALL_DIR}
 riscv-isa-sim-mod: ${ISA_SIM_MOD_INSTALL_DIR}
 
 ${ISA_SIM_MOD_INSTALL_DIR}: Makefile patches/0003-riscv-isa-sim-patch ${ISA_SIM_INSTALL_DIR}
-	# There are linking issues with the standard libraries when using newer CC/CXX versions to compile Spike.
-	# Therefore, here we resort to older versions of the compilers.
-	# If there are problems with dynamic linking, use:
-	# make riscv-isa-sim LDFLAGS="-static-libstdc++"
-	# Spike was compiled successfully using gcc and g++ version 7.2.0.
 	cd toolchain/riscv-isa-sim && git stash && git apply ../../patches/0003-riscv-isa-sim-patch && \
-	rm -rf build && mkdir -p build && cd build; \
-	[ -d dtc ] || git clone https://git.kernel.org/pub/scm/utils/dtc/dtc.git && cd dtc && git checkout $(DTC_COMMIT); \
-	make -j$(shell nproc) install SETUP_PREFIX=$(ISA_SIM_MOD_INSTALL_DIR) PREFIX=$(ISA_SIM_MOD_INSTALL_DIR) && \
-	PATH=$(ISA_SIM_MOD_INSTALL_DIR)/bin:$$PATH; cd ..; \
+	rm -rf build && mkdir -p build && cd build && \
 	../configure --prefix=$(ISA_SIM_MOD_INSTALL_DIR) \
 	--without-boost --without-boost-asio --without-boost-regex && \
 	make -j$(shell nproc) && make install; \
 	git stash
 
 ${ISA_SIM_INSTALL_DIR}: Makefile
-	# There are linking issues with the standard libraries when using newer CC/CXX versions to compile Spike.
-	# Therefore, here we resort to older versions of the compilers.
-	# If there are problems with dynamic linking, use:
-	# make riscv-isa-sim LDFLAGS="-static-libstdc++"
-	# Spike was compiled successfully using gcc and g++ version 7.2.0.
-	cd toolchain/riscv-isa-sim && rm -rf build && mkdir -p build && cd build; \
-	[ -d dtc ] || git clone https://git.kernel.org/pub/scm/utils/dtc/dtc.git && cd dtc && git checkout $(DTC_COMMIT); \
-	make -j$(shell nproc) install SETUP_PREFIX=$(ISA_SIM_INSTALL_DIR) PREFIX=$(ISA_SIM_INSTALL_DIR) && \
-	PATH=$(ISA_SIM_INSTALL_DIR)/bin:$$PATH; cd ..; \
+	rm -rf $(ROOT_DIR)/toolchain/riscv-isa-sim
+	cd $(ROOT_DIR)/toolchain && \
+	git clone --depth 1  https://github.com/riscv-software-src/riscv-isa-sim.git && \
+	cd $(ROOT_DIR)/toolchain/riscv-isa-sim && \
+	git submodule foreach --recursive 'git submodule update --init --depth=1 --single-branch'
+	cd $(ROOT_DIR)/toolchain/riscv-isa-sim && mkdir -p build && cd build && \
 	../configure --prefix=$(ISA_SIM_INSTALL_DIR) \
 	--without-boost --without-boost-asio --without-boost-regex && \
 	make -j$(shell nproc) && make install
