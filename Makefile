@@ -58,16 +58,31 @@ ifeq ($(origin CXX),default)
 CXX    = g++
 endif
 
-# We need a recent LLVM to compile Verilator
-CLANG_CC  ?= clang
-CLANG_CXX ?= clang++
-ifneq (${CLANG_PATH},)
-	CLANG_CXXFLAGS := "-nostdinc++ -isystem $(CLANG_PATH)/include/c++/v1"
-	CLANG_LDFLAGS  := "-L $(CLANG_PATH)/lib -Wl,-rpath,$(CLANG_PATH)/lib -lc++ -nostdlib++"
+ifeq ($(CLANG_PATH),)
+    SYSTEM_CLANG_CC := $(shell which clang 2>/dev/null)
+    SYSTEM_CLANG_CXX := $(shell which clang++ 2>/dev/null)
 else
-	CLANG_CXXFLAGS := ""
-	CLANG_LDFLAGS  := ""
+    SYSTEM_CLANG_CC := $(CLANG_PATH)/bin/clang
+    SYSTEM_CLANG_CXX := $(CLANG_PATH)/bin/clang++
 endif
+
+ifneq ($(CLANG_PATH),)
+    CLANG_CC := $(SYSTEM_CLANG_CC)
+    CLANG_CXX := $(SYSTEM_CLANG_CXX)
+    CLANG_CXXFLAGS := "-nostdinc++ -isystem $(CLANG_PATH)/include/c++/v1"
+    CLANG_LDFLAGS  := "-L $(CLANG_PATH)/lib -Wl,-rpath,$(CLANG_PATH)/lib -lc++ -nostdlib++"
+else ifneq ($(shell $(SYSTEM_CLANG_CC) --version | grep 'Target:.*linux'),)
+    CLANG_CC := $(SYSTEM_CLANG_CC)
+    CLANG_CXX := $(SYSTEM_CLANG_CXX)
+    CLANG_CXXFLAGS := ""
+    CLANG_LDFLAGS  := ""
+else
+    CLANG_CC := /usr/bin/clang
+    CLANG_CXX := /usr/bin/clang++
+    CLANG_CXXFLAGS := ""
+    CLANG_LDFLAGS  := ""
+endif
+
 
 # Default target
 all: toolchains riscv-isa-sim verilator
